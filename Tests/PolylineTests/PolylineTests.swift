@@ -383,4 +383,103 @@ class PolylineTests:XCTestCase {
         XCTAssertTrue(mkPolyline?.pointCount == 0)
     }
     #endif
+
+    // MARK: - Precision Rounding Tests
+    
+    func testPrecisionRoundingForExactValues() {
+        // Test with coordinates that should be decoded exactly as encoded
+        let encodedPolyline = "_qy`F_gsia@"
+        
+        print(encodedPolyline)
+        
+        let coordinates: [CLLocationCoordinate2D] = decodePolyline(encodedPolyline, precision: 1e5)!
+        
+        print(coordinates)
+        
+        // Before the fix, this might have been something like 180.00000000000003
+        XCTAssertEqual(coordinates[0].latitude, 37.0)
+        XCTAssertEqual(coordinates[0].longitude, 180.0)
+    }
+    
+    func testPrecisionRoundingWithDifferentPrecisions() {
+        // Test that rounding works for different precision values
+        
+        // Test with 1e5 precision (default)
+        let encoded1e5 = encodeCoordinates([
+            CLLocationCoordinate2D(latitude: 37.12345, longitude: -122.54321)
+        ])
+        let coords1e5: [CLLocationCoordinate2D] = decodePolyline(encoded1e5)!
+        XCTAssertEqual(coords1e5[0].latitude, 37.12345)
+        XCTAssertEqual(coords1e5[0].longitude, -122.54321)
+        
+        // Test with 1e6 precision
+        let encoded1e6 = encodeCoordinates([
+            CLLocationCoordinate2D(latitude: 37.123456, longitude: -122.543210)
+        ], precision: 1e6)
+        let coords1e6: [CLLocationCoordinate2D] = decodePolyline(encoded1e6, precision: 1e6)!
+        XCTAssertEqual(coords1e6[0].latitude, 37.123456)
+        XCTAssertEqual(coords1e6[0].longitude, -122.543210)
+    }
+    
+    func testPrecisionRoundingForNegativeValues() {
+        // Test that rounding works correctly for negative values
+        let encodedPolyline = encodeCoordinates([
+            CLLocationCoordinate2D(latitude: -90.0, longitude: -180.0)
+        ])
+        
+        print(encodedPolyline)
+        
+        let coordinates: [CLLocationCoordinate2D] = decodePolyline(encodedPolyline)!
+        
+        print(coordinates)
+        
+        XCTAssertEqual(coordinates[0].latitude, -90.0)
+        XCTAssertEqual(coordinates[0].longitude, -180.0)
+    }
+    
+    func testPrecisionRoundingForExtremeBoundaryValues() {
+        // Test extreme boundary values like poles and anti-meridian
+        let encodedPolyline = encodeCoordinates([
+            CLLocationCoordinate2D(latitude: 90.0, longitude: 180.0),
+            CLLocationCoordinate2D(latitude: -90.0, longitude: -180.0)
+        ])
+        
+        let coordinates: [CLLocationCoordinate2D] = decodePolyline(encodedPolyline)!
+        
+        XCTAssertEqual(coordinates[0].latitude, 90.0)
+        XCTAssertEqual(coordinates[0].longitude, 180.0)
+        XCTAssertEqual(coordinates[1].latitude, -90.0)
+        XCTAssertEqual(coordinates[1].longitude, -180.0)
+    }
+    
+    func testRoundTripEncodingDecodingPrecision() {
+        // Test that round-trip encoding and decoding preserves exact values
+        let originalCoordinates = [
+            CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+            CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060)
+        ]
+        
+        let encodedPolyline = encodeCoordinates(originalCoordinates)
+        let decodedCoordinates: [CLLocationCoordinate2D] = decodePolyline(encodedPolyline)!
+        
+        // Compare each coordinate with exact equality (not just epsilon accuracy)
+        for i in 0..<originalCoordinates.count {
+            XCTAssertEqual(decodedCoordinates[i].latitude, originalCoordinates[i].latitude)
+            XCTAssertEqual(decodedCoordinates[i].longitude, originalCoordinates[i].longitude)
+        }
+    }
+    
+    // Tests the specific issue that was fixed (floating point precision errors)
+    func testFloatingPointPrecisionIssue() {
+        // Create a test case that would previously fail due to precision issues
+        let encodedPolyline = encodeCoordinates([
+            CLLocationCoordinate2D(latitude: 90.0, longitude: 180.0)
+        ])
+        
+        let coordinates: [CLLocationCoordinate2D] = decodePolyline(encodedPolyline)!
+        
+        // Use string comparison to verify exactly 90.0, not 90.00000000000001
+        XCTAssertEqual(String(coordinates[0].latitude), "90.0")
+        XCTAssertEqual(String(coordinates[0].longitude), "180.0")
+    }
 }

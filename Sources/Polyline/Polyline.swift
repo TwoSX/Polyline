@@ -175,6 +175,11 @@ public func encodeLevels(_ levels: [UInt32]) -> String {
 ///
 /// - returns: A `[CLLocationCoordinate2D]` representing the decoded polyline if valid, `nil` otherwise
 public func decodePolyline(_ encodedPolyline: String, precision: Double = 1e5) -> [LocationCoordinate2D]? {
+    // Calculate the rounding factor based on precision to avoid floating-point precision loss
+    // For example, if precision is 1e5, we need to round to 5 decimal places
+    let precisionDigits = Int(log10(precision))
+    let roundingFactor = pow(10.0, Double(precisionDigits))
+    
     let data = encodedPolyline.data(using: .utf8)!
     return data.withUnsafeBytes { byteArray -> [LocationCoordinate2D]? in
         let length = data.count
@@ -190,8 +195,18 @@ public func decodePolyline(_ encodedPolyline: String, precision: Double = 1e5) -
                 let resultingLat = try decodeSingleCoordinate(byteArray: byteArray, length: length, position: &position, precision: precision)
                 lat += resultingLat
                 
+                // Round the accumulated latitude value to fix precision loss during addition
+                // This is necessary because even when individual deltas are properly rounded,
+                // floating-point errors can still accumulate during multiple additions
+                lat = (lat * roundingFactor).rounded() / roundingFactor
+                
                 let resultingLon = try decodeSingleCoordinate(byteArray: byteArray, length: length, position: &position, precision: precision)
                 lon += resultingLon
+                
+                // Similarly, round the accumulated longitude value
+                // This ensures consistent precision across all coordinate values
+                // and prevents issues like 180.0 becoming 180.00000000000003
+                lon = (lon * roundingFactor).rounded() / roundingFactor
             } catch {
                 return nil
             }
